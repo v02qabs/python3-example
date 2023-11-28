@@ -1,15 +1,26 @@
 import curses
 
-def curses_main(args):
-    w = curses.initscr()
+f = open("out.log", "w")
 
-    f = open('myfile.txt', 'w')
-    curses.echo()
-    while 1:
-        w.addstr(0,0,">")
-        w.clrtoeol()
-        s = w.getstr()
-        f.write(s)
-        if s=="q":
-            break
-curses.wrapper(curses_main)
+def log(msg):
+    f.write(msg)
+    f.flush()
+
+stdscr = curses.initscr()
+curses.echo()
+curses.cbreak()
+stdscr.keypad(True)
+
+while True:
+    stdscr.refresh()
+    key = stdscr.getkey()
+    log(key)
+    if key == "KEY_RESIZE":
+        log("{} {}".format(curses.LINES, curses.COLS))
+    if key == "q":
+        break
+  
+curses.echo()
+curses.endwin()
+
+f.close()
