@@ -7,20 +7,7 @@ def log(msg):
     f.flush()
 
 stdscr = curses.initscr()
-curses.echo()
-curses.cbreak()
-stdscr.keypad(True)
 
 while True:
-    stdscr.refresh()
-    key = stdscr.getkey()
-    log(key)
-    if key == "KEY_RESIZE":
-        log("{} {}".format(curses.LINES, curses.COLS))
-    if key == "q":
-        break
-  
-curses.echo()
-curses.endwin()
-
-f.close()
+    #key = stdscr.getch()   # char or integer (keycode), native/Polish char OK
+    key = stdscr.getstr()
