@@ -1,6 +1,12 @@
 num1 = input("num1:")
 num2 = input("num2:")
-print(num1+ " + " + num2)
-ans = int(num1) + int(num2)
-print("答え：" + str(num1) + "+" + str(num2) + "=" + str(ans))
+pattern = input("pattern")
+if str(pattern) == '+':
+	print("足し算")
+elif str(pattern) == '-':
+	print("引き算")
+elif str(pattern) == '/':
+	print("割り算")
+elif str(pattern) == '*':
+	print("掛け算")
 
