@@ -1,0 +1,8 @@
+root@slitaz:~/git/python3-example/curses/hello# python3.15 hello-1.py
+  File "/root/git/python3-example/curses/hello/hello-1.py", line 12
+    if key == 'q':
+                  ^
+IndentationError: unindent does not match any outer indentation level
+[2]+  終了                  gedit hello-1.py hello.py
+root@slitaz:~/git/python3-example/curses/hello# 
+
