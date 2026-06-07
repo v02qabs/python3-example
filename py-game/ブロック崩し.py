@@ -1,0 +1,191 @@
+import tkinter as tk
+import random
+
+class BreakoutGame:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Python ブロック崩し (Tkinter版)")
+        self.root.resizable(False, False)
+
+        # ゲーム画面のサイズ
+        self.width = 600
+        self.height = 400
+        
+        # キャンバスの配置
+        self.canvas = tk.Canvas(root, width=self.width, height=self.height, bg="black")
+        self.canvas.pack()
+
+        # スコアとゲーム状態
+        self.score = 0
+        self.game_over = False
+        self.game_clear = False
+
+        # スコアラベルの初期化
+        self.score_text = self.canvas.create_text(50, 20, text=f"Score: {self.score}", fill="white", font=("Arial", 12))
+
+        # パドル（ラケット）の設定
+        self.paddle_width = 100
+        self.paddle_height = 15
+        self.paddle_speed = 20
+        self.paddle = self.canvas.create_rectangle(
+            (self.width - self.paddle_width) / 2, self.height - 30,
+            (self.width + self.paddle_width) / 2, self.height - 30 + self.paddle_height,
+            fill="cyan"
+        )
+
+        # ボールの設定
+        self.ball_radius = 8
+        self.ball = self.canvas.create_oval(
+            self.width / 2 - self.ball_radius, self.height / 2 - self.ball_radius,
+            self.width / 2 + self.ball_radius, self.height / 2 + self.ball_radius,
+            fill="white"
+        )
+        # ボールの初期速度 (dx: 横方向, dy: 縦方向)
+        self.ball_dx = random.choice([-3, -2, 2, 3])
+        self.ball_dy = -4
+
+        # ブロックの設定
+        self.blocks = []
+        self.rows = 5
+        self.cols = 8
+        self.block_width = 70
+        self.block_height = 20
+        self.block_padding = 4
+        self.offset_top = 50
+        self.offset_left = (self.width - (self.cols * (self.block_width + self.block_padding))) / 2
+
+        self.create_blocks()
+
+        # キーバインド（左右の矢印キー、または A / D キーで移動）
+        self.root.bind("<Left>", self.move_paddle_left)
+        self.root.bind("<Right>", self.move_paddle_right)
+        self.root.bind("a", self.move_paddle_left)
+        self.root.bind("d", self.move_paddle_right)
+        self.root.bind("r", self.restart_game)  # Rキーでリスタート
+
+        # ゲームループの開始
+        self.update()
+
+    def create_blocks(self):
+        """カラフルなブロックを配置する"""
+        colors = ["#ff4757", "#ffa502", "#2ed573", "#1e90ff", "#9b59b6"]
+        for r in range(self.rows):
+            for c in range(self.cols):
+                x1 = self.offset_left + c * (self.block_width + self.block_padding)
+                y1 = self.offset_top + r * (self.block_height + self.block_padding)
+                x2 = x1 + self.block_width
+                y2 = y1 + self.block_height
+                
+                block = self.canvas.create_rectangle(x1, y1, x2, y2, fill=colors[r % len(colors)], outline="black")
+                self.blocks.append(block)
+
+    def move_paddle_left(self, event):
+        """パドルを左に動かす（画面外に出ないように制限）"""
+        coords = self.canvas.coords(self.paddle)
+        if coords[0] > 0:
+            self.canvas.move(self.paddle, -self.paddle_speed, 0)
+
+    def move_paddle_right(self, event):
+        """パドルを右に動かす（画面外に出ないように制限）"""
+        coords = self.canvas.coords(self.paddle)
+        if coords[2] < self.width:
+            self.canvas.move(self.paddle, self.paddle_speed, 0)
+
+    def update(self):
+        """メインのゲームループ（位置の更新と衝突判定）"""
+        if self.game_over or self.game_clear:
+            return
+
+        # ボールを移動
+        self.canvas.move(self.ball, self.ball_dx, self.ball_dy)
+        ball_coords = self.canvas.coords(self.ball)
+
+        # 1. 壁との衝突判定 (左右の壁)
+        if ball_coords[0] <= 0 or ball_coords[2] >= self.width:
+            self.ball_dx = -self.ball_dx
+
+        # 2. 壁との衝突判定 (天井)
+        if ball_coords[1] <= 0:
+            self.ball_dy = -self.ball_dy
+
+        # 3. 底に落ちた場合 (ゲームオーバー)
+        if ball_coords[3] >= self.height:
+            self.game_over = True
+            self.canvas.create_text(self.width / 2, self.height / 2, text="GAME OVER\nPress 'R' to Restart", fill="red", font=("Arial", 24, "bold"), justify="center")
+            return
+
+        # 4. パドルとの衝突判定
+        paddle_coords = self.canvas.coords(self.paddle)
+        # ボールの底がパドルの上辺に達し、かつ横方向がパドルの範囲内にあるか
+        if (paddle_coords[1] <= ball_coords[3] <= paddle_coords[1] + 8 and 
+            ball_coords[2] >= paddle_coords[0] and ball_coords[0] <= paddle_coords[2]):
+            # 当たった位置によって少しだけ跳ね返り角度（速度）を変える
+            paddle_center = (paddle_coords[0] + paddle_coords[2]) / 2
+            ball_center = (ball_coords[0] + ball_coords[2]) / 2
+            self.ball_dx = (ball_center - paddle_center) / 10  # パドルの端に当たるほど横に鋭く飛ぶ
+            self.ball_dy = -abs(self.ball_dy)  # 必ず上方向に跳ね返す
+
+        # 5. ブロックとの衝突判定
+        for block in self.blocks[:]:
+            block_coords = self.canvas.coords(block)
+            # ボールがブロックの矩形領域と重なっているか
+            if (ball_coords[2] >= block_coords[0] and ball_coords[0] <= block_coords[2] and
+                ball_coords[3] >= block_coords[1] and ball_coords[1] <= block_coords[3]):
+                
+                # ブロックを消去
+                self.canvas.delete(block)
+                self.blocks.remove(block)
+                
+                # 簡易的な反転処理（上下の衝突を優先的に判定）
+                self.ball_dy = -self.ball_dy
+                
+                # スコア加算
+                self.score += 10
+                self.canvas.itemconfig(self.score_text, text=f"Score: {self.score}")
+                break  # 1フレームで壊せるブロックは1つまで
+
+        # 6. ゲームクリア判定
+        if not self.blocks:
+            self.game_clear = True
+            self.canvas.create_text(self.width / 2, self.height / 2, text="GAME CLEAR!\nPress 'R' to Play Again", fill="gold", font=("Arial", 24, "bold"), justify="center")
+            return
+
+        # 約16ミリ秒後（60FPS相当）に再度updateを呼び出す
+        self.root.after(16, self.update)
+
+    def restart_game(self, event):
+        """ゲームを初期状態に戻してリスタートする"""
+        self.canvas.delete("all")
+        self.score = 0
+        self.game_over = False
+        self.game_clear = False
+        
+        self.score_text = self.canvas.create_text(50, 20, text=f"Score: {self.score}", fill="white", font=("Arial", 12))
+        
+        # パドルの再生成
+        self.paddle = self.canvas.create_rectangle(
+            (self.width - self.paddle_width) / 2, self.height - 30,
+            (self.width + self.paddle_width) / 2, self.height - 30 + self.paddle_height,
+            fill="cyan"
+        )
+        
+        # ボールの再生成
+        self.ball = self.canvas.create_oval(
+            self.width / 2 - self.ball_radius, self.height / 2 - self.ball_radius,
+            self.width / 2 + self.ball_radius, self.height / 2 + self.ball_radius,
+            fill="white"
+        )
+        self.ball_dx = random.choice([-3, -2, 2, 3])
+        self.ball_dy = -4
+        
+        # ブロックの再生成
+        self.blocks = []
+        self.create_blocks()
+        
+        # ループ再開
+        self.update()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    game = BreakoutGame(root)
+    root.mainloop()
