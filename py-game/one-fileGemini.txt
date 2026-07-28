@@ -1,0 +1,138 @@
+Gemini API を使ってファイルをアップロードし、プロンプトと一緒に送信して結果を `output.txt` に保存しつつ、実行ログを `log.txt` に記録するシェルスクリプト `gemini-ones.sh` のコードを作成しました。
+
+Gemini API（v1beta）では、サイズが大きめのファイルや確実な処理を行うために **Files API** を使ってファイルをアップロードし、そのファイルURIをプロンプトと一緒に渡す手順を踏みます。
+
+### 前提条件
+1. 環境変数 `GEMINI_API_KEY` にあなたのAPIキーを設定しておいてください。
+   ```bash
+   export GEMINI_API_KEY="AIzaSy..."
+   ```
+2. `curl` と `jq` コマンドが必要です（JSONのパースに `jq` を使用します）。インストールされていない場合は `sudo apt install jq` などでインストールしてください。
+
+---
+
+### シェルスクリプト: `gemini-ones.sh`
+
+以下のコードを `gemini-ones.sh` という名前で保存してください。
+
+```bash
+#!/bin/bash
+
+# 引数のチェック
+if [ "$#" -ne 3 ]; then
+    echo "使用方法: $0 <アップロードするファイル> <プロンプト> <出力ファイル.txt>" | tee -a log.txt
+    exit 1
+fi
+
+FILE_PATH="$1"
+PROMPT="$2"
+OUTPUT_FILE="$3"
+LOG_FILE="log.txt"
+
+# ログ関数
+log_message() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$msg" | tee -a "$LOG_FILE"
+}
+
+log_message "=== 処理開始 ==="
+log_message "対象ファイル: $FILE_PATH"
+log_message "プロンプト: $PROMPT"
+
+# APIキーのチェック
+if [ -z "$GEMINI_API_KEY" ]; then
+    log_message "エラー: 環境変数 GEMINI_API_KEY が設定されていません。"
+    exit 1
+fi
+
+# 1. ファイルのアップロード (Files API)
+log_message "ファイルをアップロード中..."
+
+FILE_SIZE=$(wc -c < "$FILE_PATH")
+MIME_TYPE=$(file --mime-type -b "$FILE_PATH")
+
+# Step 1: Resumable Upload の開始要求
+UPLOAD_URL=$(curl -s -D - \
+    -X POST "https://generativelanguage.googleapis.com/upload/v1beta/files?key=$GEMINI_API_KEY" \
+    -H "X-Goog-Upload-Protocol: resumable" \
+    -H "X-Goog-Upload-Command: start" \
+    -H "X-Goog-Upload-Header-Content-Length: $FILE_SIZE" \
+    -H "X-Goog-Upload-Header-Content-Type: $MIME_TYPE" \
+    -H "Content-Type: application/json" \
+    -d "{\"file\": {\"display_name\": \"$(basename "$FILE_PATH")\"}}" | grep -i "x-goog-upload-url:" | tr -d '\r' | cut -d' ' -f2)
+
+if [ -z "$UPLOAD_URL" ]; then
+    log_message "エラー: アップロードURLの取得に失敗しました。"
+    exit 1
+fi
+
+# Step 2: 実際のデータ送信
+UPLOAD_RESPONSE=$(curl -s \
+    -X POST "$UPLOAD_URL" \
+    -H "X-Goog-Upload-Offset: 0" \
+    -H "X-Goog-Upload-Command: upload, finalize" \
+    -H "Content-Length: $FILE_SIZE" \
+    -H "Content-Type: $MIME_TYPE" \
+    --data-binary "@$FILE_PATH")
+
+# ファイルURIの取得
+FILE_URI=$(echo "$UPLOAD_RESPONSE" | jq -r '.file.uri')
+
+if [ "$FILE_URI" == "null" ] || [ -z "$FILE_URI" ]; then
+    log_message "エラー: ファイルのアップロードに失敗しました。レスポンス: $UPLOAD_RESPONSE"
+    exit 1
+fi
+
+log_message "アップロード成功: URI = $FILE_URI"
+
+# 2. Gemini生成AIの呼び出し (GenerateContent API)
+log_message "Geminiにリクエストを送信中（使用モデル: gemini-1.5-pro）..."
+
+# ※コード分析には大容量コンテキストに強い gemini-1.5-pro を推奨しますが、gemini-1.5-flash でも可能です
+API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=$GEMINI_API_KEY"
+
+RESPONSE=$(curl -s -X POST "$API_URL" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"contents\": [
+        {
+          \"parts\": [
+            {\"file_data\": {\"file_uri\": \"$FILE_URI\", \"mime_type\": \"$MIME_TYPE\"}},
+            {\"text\": \"$PROMPT\"}
+          ]
+        }
+      ]
+    }")
+
+# 結果の抽出
+RESULT_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+
+if [ "$RESULT_TEXT" == "null" ] || [ -z "$RESULT_TEXT" ]; then
+    log_message "エラー: Geminiからの応答取得に失敗しました。"
+    echo "$RESPONSE" >> "$LOG_FILE"
+    exit 1
+fi
+
+# 3. 結果の出力
+echo "$RESULT_TEXT" > "$OUTPUT_FILE"
+log_message "結果を $OUTPUT_FILE に保存しました。"
+log_message "=== 処理終了 ==="
+```
+
+---
+
+### 使い方
+
+1. スクリプトに実行権限を付与します。
+   ```bash
+   chmod +x gemini-ones.sh
+   ```
+
+2. 実行します（プロンプトにスペースが含まれる場合はダブルクォーテーションで囲みます）。
+   ```bash
+   ./gemini-ones.sh sample.py "このPythonコードを解説して、改善点があれば教えて。" output.txt
+   ```
+
+3. 実行結果の確認：
+   * AIからの回答は指定通り `output.txt` に保存されます。
+   * 処理の経過やエラーはすべて `log.txt` に追記されます。

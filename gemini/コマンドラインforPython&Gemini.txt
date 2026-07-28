@@ -1,0 +1,92 @@
+Python 3.13.5環境で、ご指定の形式（`python3 script.py <input-file>.txt <プロンプト> <output.txt>`）でGeminiモデル（※ご指定の「Gemini 3.5 flush」は存在しないため、現時点で最新かつ最も強力な**`gemini-2.5-flash`**を使用します）を呼び出すスクリプトを作成しました。
+
+以下の手順に従って実行してください。
+
+### 1. 準備（ライブラリのインストールとAPIキーの設定）
+
+必要なGoogle公式SDKがインストールされていることを確認し、APIキーを設定します。
+
+```bash
+# ライブラリのインストール（まだの場合）
+pip install google-genai
+
+# 環境変数にGeminiのAPIキーを設定
+export GEMINI_API_KEY="あなたのAPIキー"
+```
+
+### 2. Pythonスクリプトの作成
+
+以下のコードを `gemini_runner.py` という名前で保存してください。
+
+```python
+import argparse
+import sys
+from google import genai
+from google.genai import types
+
+
+def main():
+    # コマンドライン引数の設定
+    parser = argparse.ArgumentParser(
+        description="Gemini APIを使ってテキストファイルを処理します。"
+    )
+    parser.add_argument("input_file", help="入力テキストファイルのパス")
+    parser.add_argument("prompt", help="Geminiへのプロンプト（指示文）")
+    parser.add_argument("output_file", help="出力テキストファイルのパス")
+
+    args = parser.parse_args()
+
+    # 1. 入力ファイルの読み込み
+    try:
+        with open(args.input_file, "r", encoding="utf-8") as f:
+            file_content = f.read()
+    except Exception as e:
+        print(f"エラー: 入力ファイルを開けませんでした ({args.input_file}): {e}")
+        sys.exit(1)
+
+    # 2. プロンプトとファイル内容を結合
+    # プロンプトの後にファイル内容を渡す構成にしています
+    full_prompt = f"{args.prompt}\n\n--- 対象データ ---\n{file_content}"
+
+    # 3. Gemini APIの呼び出し (gemini-2.5-flash を使用)
+    try:
+        # クライアントの初期化（環境変数 GEMINI_API_KEY を自動読み込み）
+        client = genai.Client()
+
+        print(
+            f"Gemini (gemini-2.5-flash) に処理を依頼中... ({args.input_file})"
+        )
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=full_prompt,
+        )
+
+        output_text = response.text
+
+    except Exception as e:
+        print(f"エラー: Gemini APIの呼び出しに失敗しました: {e}")
+        sys.exit(1)
+
+    # 4. 出力ファイルへの書き込み
+    try:
+        with open(args.output_file, "w", encoding="utf-8") as f:
+            f.write(output_text)
+        print(f"完了しました。結果を {args.output_file} に保存しました。")
+    except Exception as e:
+        print(f"エラー: 出力ファイルを保存できませんでした ({args.output_file}): {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### 3. 実行方法
+
+ご希望のコマンド形式に合わせて、以下のように実行します。
+
+```bash
+python3.13 gemini_runner.py input.txt "以下の文章を日本語に翻訳して" output.txt
+```
+*(※Python 3.13.5の実行バイナリ名に合わせて `python3.13` または `python3` に読み替えてください)*

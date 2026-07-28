@@ -1,0 +1,55 @@
+結論から言うと、**Gemini APIの無料枠（Free Tier）でも、cURLを使ってファイルをアップロードすることは可能**です。
+
+画像、音声、動画、PDFなどのファイルをアップロードしてGeminiに処理させることができます。
+
+ただし、無料枠ならではの**制限や注意点**がいくつかあります。
+
+### 無料枠におけるファイルアップロードの主な制限・注意点
+
+1. **ファイルサイズと容量の制限**
+   * **ファイルサイズ:** 1ファイルあたり最大2GBまで（動画や大きなPDFも可）。
+   * **ストレージ制限:** 無料枠では、APIにアップロードしたファイルの合計保存容量に制限があります（Googleのサーバーに一時保存され、通常48時間で自動削除されます）。
+
+2. **利用できるAPIが違う（重要）**
+   * テキストだけのやり取りなら `generateContent` エンドポイントを直接cURLで叩けますが、大きなファイル（画像・動画・音声・PDFなど）を扱う場合は、**Files API**を使って事前にアップロードし、そのファイルURIを取得してプロンプトと一緒に送信する必要があります。
+
+3. **データのプライバシー（無料枠の罠）**
+   * **無料枠（Free Tier）でアップロードしたデータは、GoogleのAIモデルの学習・改善に使用されます。** 個人情報や機密データ、著作権のあるファイルをアップロードしないよう注意してください。学習されたくない場合は有料枠（Pay-as-you-go）に切り替える必要があります。
+
+4. **レートリミット（回数制限）**
+   * 無料枠には1分あたりのリクエスト数（RPM）や1日あたりのリクエスト数（RPD）に制限があります。大きなファイルを頻繁にアップロードするとすぐに制限に達します。
+
+---
+
+### 簡単な手順（Files APIを使ったcURLの例）
+
+ファイルをアップロードして質問する流れは以下の2ステップです。
+
+#### 1. ファイルのアップロード（Files API）
+```bash
+curl "https://generativelanguage.googleapis.com/upload/v1beta/files?key=YOUR_API_KEY" \
+  -H "X-Goog-Upload-Command: start, upload, finalize" \
+  -H "X-Goog-Upload-Header-Content-Length: <ファイルのバイト数>" \
+  -H "X-Goog-Upload-Header-Content-Type: image/jpeg" \
+  --data-binary "@path/to/image.jpg"
+```
+成功すると、レスポンスの中に `uri` （例: `https://generativelanguage.googleapis.com/v1beta/files/abc123xyz`）が返ってきます。
+
+#### 2. アップロードしたファイルを指定して生成を実行
+```bash
+curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=YOUR_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -X POST \
+  -d '{
+    "contents": [
+      {
+        "parts": [
+          {"file_data": {"file_uri": "先ほど取得したuri", "mime_type": "image/jpeg"}},
+          {"text": "この画像に何が写っていますか？"}
+        ]
+      }
+    ]
+  }'
+```
+
+※なお、画像などの小さなデータであれば、Files APIを使わず、Base64エンコードして直接JSONに埋め込んで送る方法（インラインデータ）もあり、こちらも無料枠で利用可能です。

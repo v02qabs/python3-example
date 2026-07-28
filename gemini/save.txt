@@ -1,0 +1,119 @@
+提供されたPythonコードは、Googleの最新の生成AIである**Gemini**と、コマンドライン（ターミナル）上でリアルタイムにチャットができるCUI（Character User Interface）アプリケーションです。
+
+このコードは、Googleが新しく推奨している**「Google GenAI SDK」**（`google-genai`パッケージ）を使用しています。
+
+以下に、コードの構成と各部分の役割を詳しく解説します。
+
+---
+
+### 全体像と特徴
+1. **会話履歴の維持**: 一問一答ではなく、これまでの会話の流れ（文脈）を記憶した状態でチャットができます。
+2. **エラーハンドリング**: APIキーの有無チェック、APIエラー、キーボードによる強制終了（Ctrl+C）に適切に対応しています。
+3. **ユーザー体験（UX）の工夫**: Geminiの応答を待っている間、「思考中...」と表示し、応答が来たらその文字を消してスムーズに回答を表示します。
+
+---
+
+### 詳細なコード解説
+
+#### 1. ライブラリのインポート
+```python
+import os
+import sys
+from google import genai
+from google.genai import errors
+```
+* `os` / `sys`: 環境変数の取得や、エラー時のプログラム終了処理に使用します。
+* `from google import genai`: Googleの新しいGenAI SDKです。（古い `google-generativeai` ではなく、新しい推奨パッケージです）。
+* `errors`: APIとの通信エラーをキャッチするためにインポートしています。
+
+#### 2. APIキーの確認とクライアントの初期化
+```python
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("エラー: GEMINI_API_KEY 環境変数が設定されていません。", file=sys.stderr)
+        # (中略)
+        sys.exit(1)
+
+    client = genai.Client(api_key=api_key)
+```
+* 環境変数 `GEMINI_API_KEY` からAPIキーを取得します。
+* キーが設定されていない場合は、設定方法を親切に表示してプログラムを終了します。
+* 安全に接続するために、APIキーを使って `genai.Client` を初期化します。
+
+#### 3. モデルの指定とチャットセッションの開始
+```python
+    model_id = "gemini-3.5-flash"
+    # (中略)
+    chat = client.chats.create(model=model_id)
+```
+* 使用するAIモデルに `gemini-3.5-flash` を指定しています。高速で安価、かつ高性能なモデルです。
+* `client.chats.create(...)` を呼び出すことで、**会話履歴を管理するオブジェクト（セッション）**を作成します。これにより「さっき言ったことを覚えている」チャットが可能になります。
+
+#### 4. メインループ（ユーザーとの対話）
+```python
+    while True:
+        try:
+            user_input = input("\nYou: ")
+            if user_input.lower() in ["exit", "quit"]:
+                print("終了します。")
+                break
+
+            if not user_input.strip():
+                continue
+```
+* `while True` で、ユーザーが明示的に終了するまで入力を待ち続けます。
+* ユーザーが `exit` または `quit` と入力するとループを抜けて終了します。
+* 何も入力せずにエンターを押した（空文字）場合は、再度入力を促します。
+
+#### 5. メッセージの送信と表示の工夫
+```python
+            print("Gemini: 思考中...", end="\r")
+
+            # メッセージの送信とレスポンスの取得
+            response = chat.send_message(user_input)
+
+            # 行頭の「思考中...」をクリアして出力
+            print(" " * 20, end="\r")
+            print(f"Gemini: {response.text}")
+```
+* **「思考中...」の表示**: `end="\r"` を使うことで、改行せずにカーソルを行頭に戻します。
+* **メッセージ送信**: `chat.send_message(user_input)` でGeminiにテキストを送り、返答（`response`）を待ちます。
+* **表示のクリア**: 返答が来たら、半角スペース20個を出力して「思考中...」という文字を上書きして消去し、そこへ最新の `response.text`（AIの回答）を表示します。これにより画面が綺麗に保たれます。
+
+#### 6. エラーハンドリング
+```python
+        except errors.APIError as e:
+            print(f"\nAPIエラーが発生しました: {e}")
+        except KeyboardInterrupt:
+            print("\n終了します。")
+            break
+```
+* `errors.APIError`: ネットワークエラーやAPI利用制限、キーの無効化などのエラーが発生した際に、プログラムがクラッシュするのを防ぎ、エラー内容を画面に表示します。
+* `KeyboardInterrupt`: ユーザーがキーボードで `Ctrl+C` を押して強制終了しようとした場合、エラー画面（トレースバック）を出さずに「終了します。」と美しく終了します。
+
+---
+
+### このコードを実行するために必要な準備
+実行するには、以下の手順が必要です。
+
+1. **ライブラリのインストール**:
+   ```bash
+   pip install google-genai
+   ```
+2. **APIキーの設定**:
+   * Mac/Linuxの場合:
+     ```bash
+     export GEMINI_API_KEY="あなたのAPIキー"
+     ```
+   * Windows (コマンドプロンプト) の場合:
+     ```cmd
+     set GEMINI_API_KEY="あなたのAPIキー"
+     ```
+   * Windows (PowerShell) の場合:
+     ```powershell
+     $env:GEMINI_API_KEY="あなたのAPIキー"
+     ```
+3. **実行**:
+   ```bash
+   python ファイル名.py
+   ```

@@ -1,0 +1,5 @@
+user@user-80g0:~/git/python3-example/py-game$ geminiTwo.sh "./ブロック崩し.py" "./log.txt"  "ブロック崩しで、玉の速度をもっと遅くして 
+。" "玉が遅い.txt"
+アップロード中: ブロック崩し.py (text/x-script.python)...
+エラー: ファイルURIの取得に失敗しました: ブロック崩し.py
+user@user-80g0:~/git/python3-example/py-game$
